@@ -1,6 +1,12 @@
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI()
+
+
+class TaskCreate(BaseModel):
+    title: str
+
 
 # In-memory "database" — a plain Python list of dictionaries.
 # This data lives only in RAM and resets every time the server restarts.
@@ -40,3 +46,15 @@ def get_task(task_id: int):
         if task["id"] == task_id:
             return task
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+
+@app.post("/tasks", status_code=201)
+def create_task(new_task: TaskCreate):
+    """Creates a new task. Title must not be missing or empty."""
+    if len(new_task.title.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    next_id = max(task["id"] for task in tasks) + 1
+    task = {"id": next_id, "title": new_task.title, "done": False}
+    tasks.append(task)
+    return task
