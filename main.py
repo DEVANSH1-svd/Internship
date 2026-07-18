@@ -1,11 +1,19 @@
 from fastapi import FastAPI
 
-# Create the FastAPI application instance.
-# This object is the core of your server — every route attaches to it.
 app = FastAPI()
 
 
 @app.get("/")
 def read_root():
-    """A simple hello message, so we know the server is alive."""
-    return {"message": "Hello, this is my Task API!"}
+    """Describes the API: its name, version, and available endpoints."""
+    return {
+        "name": "Task API",
+        "version": "1.0",
+        "endpoints": ["/tasks"]
+    }
+
+
+@app.get("/health")
+def health_check():
+    """Used by monitoring tools to confirm the server is alive."""
+    return {"status": "ok"}
