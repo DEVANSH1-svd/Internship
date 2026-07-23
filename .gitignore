@@ -7,3 +7,5 @@ task.json
 empty.json
 
 update.json
+
+.env
