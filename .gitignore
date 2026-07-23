@@ -9,3 +9,5 @@ empty.json
 update.json
 
 .env
+
+*_task.json

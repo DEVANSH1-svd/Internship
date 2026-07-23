@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from db import init_db, get_all_tasks, get_task_by_id
-app = FastAPI()
+from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 
+app = FastAPI()
 init_db()
+
+
 class TaskCreate(BaseModel):
     title: str
 
@@ -11,13 +13,6 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: str
     done: bool
-
-
-tasks = [
-    {"id": 1, "title": "Learn FastAPI", "done": False},
-    {"id": 2, "title": "Build a CRUD API", "done": False},
-    {"id": 3, "title": "Buy milk", "done": True},
-]
 
 
 @app.get("/")
@@ -47,28 +42,21 @@ def get_task(task_id: int):
 def create_task(new_task: TaskCreate):
     if len(new_task.title.strip()) == 0:
         raise HTTPException(status_code=400, detail="Title cannot be empty")
-    next_id = max(task["id"] for task in tasks) + 1
-    task = {"id": next_id, "title": new_task.title, "done": False}
-    tasks.append(task)
-    return task
+    return create_task_db(new_task.title, done=False)
 
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, updated_task: TaskUpdate):
     if len(updated_task.title.strip()) == 0:
         raise HTTPException(status_code=400, detail="Title cannot be empty")
-    for task in tasks:
-        if task["id"] == task_id:
-            task["title"] = updated_task.title
-            task["done"] = updated_task.done
-            return task
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    task = update_task_db(task_id, updated_task.title, updated_task.done)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
 
 
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            tasks.remove(task)
-            return
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    deleted = delete_task_db(task_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
