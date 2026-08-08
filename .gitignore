@@ -11,3 +11,4 @@ update.json
 .env
 
 *_task.json
+*_test.json

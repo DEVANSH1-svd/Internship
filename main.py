@@ -16,6 +16,9 @@ class TaskUpdate(BaseModel):
     title: str
     done: bool
 
+class AuthCredentials(BaseModel):
+    email: str
+    password: str
 
 @app.get("/")
 def read_root():
@@ -26,6 +29,37 @@ def read_root():
 def health_check():
     return {"status": "ok"}
 
+@app.post("/auth/signup", status_code=201)
+def signup(credentials: AuthCredentials):
+    if len(credentials.email.strip()) == 0 or len(credentials.password.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    try:
+        result = supabase.auth.sign_up({
+            "email": credentials.email,
+            "password": credentials.password
+        })
+        return {"user": result.user}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/auth/login", status_code=200)
+def login(credentials: AuthCredentials):
+    if len(credentials.email.strip()) == 0 or len(credentials.password.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    try:
+        result = supabase.auth.sign_in_with_password({
+            "email": credentials.email,
+            "password": credentials.password
+        })
+        return {
+            "access_token": result.session.access_token,
+            "refresh_token": result.session.refresh_token
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid login credentials")
 
 @app.get("/tasks")
 def list_tasks():
