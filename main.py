@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.responses import JSONResponse
+from fastapi import Request
 from pydantic import BaseModel
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
@@ -114,3 +116,8 @@ def protected_profile(authorization: str = Header(None)):
 
     # Stage 3 will replace this placeholder with real Supabase verification
     return {"message": "Token received, verification coming in Stage 3", "token_preview": token[:10] + "..."}
+
+
+@app.exception_handler(HTTPException)
+def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
