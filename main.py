@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.responses import JSONResponse
 from fastapi import Request
 from pydantic import BaseModel
@@ -63,6 +63,29 @@ def login(credentials: AuthCredentials):
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid login credentials")
 
+
+def get_current_user(authorization: str = Header(None)):
+    """Reusable dependency: extracts and verifies the Bearer token.
+    Any route that adds `user = Depends(get_current_user)` becomes protected."""
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Access token required")
+
+    token = authorization.split("Bearer ")[1]
+
+    try:
+        result = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return result.user
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(user = Depends(get_current_user)):
+    supabase.auth.sign_out()
+    return
+
+
 @app.get("/tasks")
 def list_tasks():
     return get_all_tasks()
@@ -100,31 +123,23 @@ def delete_task(task_id: int):
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
 
-from fastapi import Header
-
 @app.get("/public/info")
 def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
 
 @app.get("/protected/profile")
-def protected_profile(authorization: str = Header(None)):
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Access token required")
-
-    token = authorization.split("Bearer ")[1]
-
-    try:
-        result = supabase.auth.get_user(token)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user = result.user
+def protected_profile(user = Depends(get_current_user)):
     return {
         "id": user.id,
         "email": user.email,
         "created_at": user.created_at
     }
+
+
+@app.get("/protected/dashboard")
+def protected_dashboard(user = Depends(get_current_user)):
+    return {"message": f"Welcome to your dashboard, {user.email}!"}
 
 
 @app.exception_handler(HTTPException)
