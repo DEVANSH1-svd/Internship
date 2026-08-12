@@ -114,8 +114,17 @@ def protected_profile(authorization: str = Header(None)):
 
     token = authorization.split("Bearer ")[1]
 
-    # Stage 3 will replace this placeholder with real Supabase verification
-    return {"message": "Token received, verification coming in Stage 3", "token_preview": token[:10] + "..."}
+    try:
+        result = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = result.user
+    return {
+        "id": user.id,
+        "email": user.email,
+        "created_at": user.created_at
+    }
 
 
 @app.exception_handler(HTTPException)
