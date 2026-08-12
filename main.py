@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse
-from fastapi import Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
 
 app = FastAPI()
+security = HTTPBearer()
+
 init_db()
 print("Server running and connected to Supabase")
 
@@ -64,13 +66,11 @@ def login(credentials: AuthCredentials):
         raise HTTPException(status_code=401, detail="Invalid login credentials")
 
 
-def get_current_user(authorization: str = Header(None)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Reusable dependency: extracts and verifies the Bearer token.
-    Any route that adds `user = Depends(get_current_user)` becomes protected."""
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Access token required")
-
-    token = authorization.split("Bearer ")[1]
+    Also registers the Bearer security scheme with FastAPI's OpenAPI docs,
+    so /docs shows a padlock icon and an Authorize button for protected routes."""
+    token = credentials.credentials
 
     try:
         result = supabase.auth.get_user(token)
