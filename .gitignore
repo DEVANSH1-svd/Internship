@@ -1,4 +1,4 @@
-﻿venv/
+venv/
 .venv/
 __pycache__/
 *.pyc
@@ -11,4 +11,4 @@ update.json
 .env
 
 *_task.json
-*_test.json
+*_test*.json
