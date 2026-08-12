@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
@@ -96,3 +96,21 @@ def delete_task(task_id: int):
     deleted = delete_task_db(task_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+
+from fastapi import Header
+
+@app.get("/public/info")
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+
+@app.get("/protected/profile")
+def protected_profile(authorization: str = Header(None)):
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Access token required")
+
+    token = authorization.split("Bearer ")[1]
+
+    # Stage 3 will replace this placeholder with real Supabase verification
+    return {"message": "Token received, verification coming in Stage 3", "token_preview": token[:10] + "..."}
