@@ -1,9 +1,13 @@
 import time
+import json
+import re
 import requests
 from pathlib import Path
 from urllib.parse import urljoin
 from datetime import datetime, timezone
+from typing import Optional
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, HttpUrl, ValidationError
 
 USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/DEVANSH1-svd/Internship)"
 TIMEOUT_SECONDS = 10
@@ -61,21 +65,19 @@ def get_catalogue_pages(max_pages: int = 3) -> list[str]:
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # Each book is inside <article class="product_pod"><h3><a href="...">
         for article in soup.select("article.product_pod"):
             link = article.select_one("h3 a")
             if link and link.get("href"):
                 absolute_url = urljoin(current_url, link["href"])
                 all_book_urls.append(absolute_url)
 
-        # Follow the site's own "next" link, don't hardcode page numbers
         next_link = soup.select_one("li.next a")
         if next_link and next_link.get("href"):
             current_url = urljoin(current_url, next_link["href"])
         else:
             current_url = None
 
-    unique_urls = list(dict.fromkeys(all_book_urls))  # de-dupe, preserve order
+    unique_urls = list(dict.fromkeys(all_book_urls))
 
     print(f"catalogue_pages={pages_visited} discovered={len(all_book_urls)} unique_urls={len(unique_urls)}")
     return unique_urls
@@ -90,13 +92,10 @@ def extract_book_record(detail_url: str, source_page: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
 
     title = soup.select_one(".product_main h1").get_text(strip=True)
-
     price_text = soup.select_one("p.price_color").get_text(strip=True)
-
     availability_text = soup.select_one("p.instock.availability").get_text(strip=True)
 
     rating_tag = soup.select_one("p.star-rating")
-    # e.g. class="star-rating Three" -> the rating word is the second class
     rating_text = rating_tag["class"][1] if rating_tag else None
 
     description_tag = soup.select_one("#product_description ~ p")
@@ -131,7 +130,71 @@ def extract_all_books(book_urls: list[str], source_page: str) -> list[dict]:
     return records
 
 
+class BookRecord(BaseModel):
+    title: str
+    product_url: HttpUrl
+    price_text: str
+    price_gbp: float
+    availability_text: str
+    rating_text: Optional[str] = None
+    description: Optional[str] = None
+    source_page: str
+    fetched_at: str
+
+
+def parse_price(price_text: str) -> float:
+    """Turn '£51.77' into 51.77. Strips any non-digit, non-dot characters."""
+    cleaned = re.sub(r"[^\d.]", "", price_text)
+    return float(cleaned)
+
+
+def normalize_and_validate(raw_records: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Normalize raw records and validate each against BookRecord.
+    Returns (valid_records, error_records)."""
+    seen_urls = set()
+    valid_records = []
+    error_records = []
+
+    for raw in raw_records:
+        try:
+            product_url = raw["product_url"]
+            if product_url in seen_urls:
+                continue
+            seen_urls.add(product_url)
+
+            enriched = {
+                **raw,
+                "price_gbp": parse_price(raw["price_text"])
+            }
+
+            record = BookRecord(**enriched)
+            valid_records.append(json.loads(record.model_dump_json()))
+
+        except (ValidationError, ValueError, KeyError) as e:
+            error_records.append({
+                "record": raw,
+                "reason": str(e)
+            })
+
+    return valid_records, error_records
+
+
+def save_output(valid_records: list[dict], error_records: list[dict]):
+    output_dir = Path(__file__).parent.parent / "output"
+    output_dir.mkdir(exist_ok=True)
+
+    (output_dir / "books.json").write_text(
+        json.dumps(valid_records, indent=2), encoding="utf-8"
+    )
+    (output_dir / "errors.json").write_text(
+        json.dumps(error_records, indent=2), encoding="utf-8"
+    )
+
+    print(f"valid_records={len(valid_records)} error_records={len(error_records)}")
+
+
 if __name__ == "__main__":
     book_urls = get_catalogue_pages()
-    records = extract_all_books(book_urls, source_page=BASE_URL)
-    print(records[0])
+    raw_records = extract_all_books(book_urls, source_page=BASE_URL)
+    valid_records, error_records = normalize_and_validate(raw_records)
+    save_output(valid_records, error_records)
