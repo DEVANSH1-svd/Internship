@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException, Header, Depends, Request
+﻿from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
+import os
+from llm.schema import EnrichRequest, EnrichResponse
+from llm.stub import get_stub_response
+
 
 app = FastAPI()
 security = HTTPBearer()
@@ -145,3 +149,11 @@ def protected_dashboard(user = Depends(get_current_user)):
 @app.exception_handler(HTTPException)
 def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+@app.post("/enrich", response_model=EnrichResponse)
+def enrich(request: EnrichRequest):
+    if os.getenv("LLM_STUB") == "1":
+        return get_stub_response()
+
+    # Real model call comes in Stage 2 - for now, stub mode is the only path
+    raise HTTPException(status_code=501, detail="Real model call not implemented yet")
