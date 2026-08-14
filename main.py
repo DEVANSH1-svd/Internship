@@ -7,7 +7,7 @@ from auth.supabase_client import supabase
 import os
 from llm.schema import EnrichRequest, EnrichResponse
 from llm.stub import get_stub_response
-
+from llm.client import call_model
 
 app = FastAPI()
 security = HTTPBearer()
@@ -155,5 +155,12 @@ def enrich(request: EnrichRequest):
     if os.getenv("LLM_STUB") == "1":
         return get_stub_response()
 
-    # Real model call comes in Stage 2 - for now, stub mode is the only path
-    raise HTTPException(status_code=501, detail="Real model call not implemented yet")
+    raw_text = call_model(request.model_dump())
+    print(f"RAW MODEL OUTPUT: {raw_text}")
+
+    # Stage 3 will add real parsing/validation/repair here.
+    # For now, this will likely fail if the model doesn't return perfect JSON -
+    # that's expected and is exactly what Stage 3 fixes.
+    import json
+    parsed = json.loads(raw_text)
+    return EnrichResponse(**parsed)
