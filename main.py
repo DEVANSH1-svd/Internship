@@ -1,15 +1,18 @@
 ﻿from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, ValidationError
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
 import os
-from pydantic import BaseModel, ValidationError
 from llm.schema import EnrichRequest, EnrichResponse
 from llm.stub import get_stub_response
 from llm.client import call_model, call_model_for_repair, PROMPT_VERSION
 from llm.parse import try_parse_json
 from llm.quarantine import log_quarantine
+from llm.cost_log import log_cost
+from openai import APIStatusError
+
 
 app = FastAPI()
 security = HTTPBearer()
@@ -152,13 +155,25 @@ def protected_dashboard(user = Depends(get_current_user)):
 def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
 
+
 @app.post("/enrich", response_model=EnrichResponse)
 def enrich(request: EnrichRequest):
     if os.getenv("LLM_STUB") == "1":
         return get_stub_response()
 
+    if os.getenv("LLM_ENABLED", "true").lower() == "false":
+        raise HTTPException(status_code=503, detail="LLM feature is currently disabled")
+
     input_data = request.model_dump()
-    raw_text = call_model(input_data)
+
+    try:
+        raw_text, metadata = call_model(input_data)
+    except APIStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Model provider rejected the request: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=504, detail=f"Model call failed or timed out: {e}")
+
+    log_cost(metadata)
 
     parsed, parse_error = try_parse_json(raw_text)
     validation_error = None
@@ -171,8 +186,15 @@ def enrich(request: EnrichRequest):
     else:
         validation_error = parse_error
 
-    # First attempt failed - repair once
-    repaired_text = call_model_for_repair(input_data, raw_text, validation_error)
+    try:
+        repaired_text, repair_metadata = call_model_for_repair(input_data, raw_text, validation_error)
+    except APIStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Model provider rejected the repair request: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=504, detail=f"Repair call failed or timed out: {e}")
+
+    log_cost(repair_metadata)
+
     repaired_parsed, repair_parse_error = try_parse_json(repaired_text)
 
     if repaired_parsed is not None:
@@ -184,5 +206,3 @@ def enrich(request: EnrichRequest):
 
     log_quarantine(input_data, repaired_text, repair_parse_error, PROMPT_VERSION)
     raise HTTPException(status_code=422, detail="Model output could not be parsed after repair attempt")
-
-
