@@ -10,7 +10,6 @@ class Category(str, Enum):
     childrens = "childrens"
     other = "other"
 
-
 class QualityFlag(str, Enum):
     missing_description = "missing_description"
     very_short_description = "very_short_description"

@@ -1,13 +1,15 @@
 ﻿from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
 from db import init_db, get_all_tasks, get_task_by_id, create_task_db, update_task_db, delete_task_db
 from auth.supabase_client import supabase
 import os
+from pydantic import BaseModel, ValidationError
 from llm.schema import EnrichRequest, EnrichResponse
 from llm.stub import get_stub_response
-from llm.client import call_model
+from llm.client import call_model, call_model_for_repair, PROMPT_VERSION
+from llm.parse import try_parse_json
+from llm.quarantine import log_quarantine
 
 app = FastAPI()
 security = HTTPBearer()
@@ -155,12 +157,32 @@ def enrich(request: EnrichRequest):
     if os.getenv("LLM_STUB") == "1":
         return get_stub_response()
 
-    raw_text = call_model(request.model_dump())
-    print(f"RAW MODEL OUTPUT: {raw_text}")
+    input_data = request.model_dump()
+    raw_text = call_model(input_data)
 
-    # Stage 3 will add real parsing/validation/repair here.
-    # For now, this will likely fail if the model doesn't return perfect JSON -
-    # that's expected and is exactly what Stage 3 fixes.
-    import json
-    parsed = json.loads(raw_text)
-    return EnrichResponse(**parsed)
+    parsed, parse_error = try_parse_json(raw_text)
+    validation_error = None
+
+    if parsed is not None:
+        try:
+            return EnrichResponse.model_validate(parsed)
+        except ValidationError as e:
+            validation_error = str(e)
+    else:
+        validation_error = parse_error
+
+    # First attempt failed - repair once
+    repaired_text = call_model_for_repair(input_data, raw_text, validation_error)
+    repaired_parsed, repair_parse_error = try_parse_json(repaired_text)
+
+    if repaired_parsed is not None:
+        try:
+            return EnrichResponse.model_validate(repaired_parsed)
+        except ValidationError as e:
+            log_quarantine(input_data, repaired_text, str(e), PROMPT_VERSION)
+            raise HTTPException(status_code=422, detail="Model output failed validation after repair attempt")
+
+    log_quarantine(input_data, repaired_text, repair_parse_error, PROMPT_VERSION)
+    raise HTTPException(status_code=422, detail="Model output could not be parsed after repair attempt")
+
+
