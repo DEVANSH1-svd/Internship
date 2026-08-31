@@ -86,6 +86,16 @@ export const runWorkflow = inngest.createFunction(
       currentNode = nextEdge ? nodes.find((n) => n.id === nextEdge.target) : undefined;
     }
 
-    return { executionLog, stepCount };
+        const result = { executionLog, stepCount };
+
+    await step.run("save-result", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const filePath = path.join(process.cwd(), ".workflow-results", `${event.id}.json`);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, JSON.stringify(result));
+    });
+
+    return result;
   }
 );
