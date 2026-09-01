@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 export type DecisionNodeData = {
   prompt: string;
   onPromptChange?: (nodeId: string, newPrompt: string) => void;
+  executionAnswer?: "YES" | "NO" | null;
 };
 
 export function DecisionNode({ id, data, selected }: NodeProps) {
@@ -35,16 +36,33 @@ export function DecisionNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <Card
-        className={`w-64 cursor-pointer ${selected ? "ring-2 ring-primary" : ""}`}
+            <Card
+        className={`w-64 cursor-pointer ${selected ? "ring-2 ring-primary" : ""} ${
+          nodeData.executionAnswer === "YES"
+            ? "ring-2 ring-green-500"
+            : nodeData.executionAnswer === "NO"
+            ? "ring-2 ring-red-500"
+            : ""
+        }`}
         onClick={handleOpen}
       >
         <Handle type="target" position={Position.Top} />
         <CardHeader className="pb-2">
           <p className="text-xs font-medium text-muted-foreground">Decision</p>
         </CardHeader>
-        <CardContent>
+                <CardContent>
           <p className="text-sm">{nodeData.prompt || "Click to edit prompt..."}</p>
+          {nodeData.executionAnswer && (
+            <span
+              className={`inline-block mt-2 px-2 py-0.5 rounded text-xs font-bold ${
+                nodeData.executionAnswer === "YES"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {nodeData.executionAnswer}
+            </span>
+          )}
         </CardContent>
 
         <Handle
