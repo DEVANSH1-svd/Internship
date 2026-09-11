@@ -65,7 +65,7 @@ TEMPLATE_HTML = """
 def render_report_pdf(output_path: str = "report.pdf") -> str:
     """Query the data, render it into HTML, then print that HTML to a PDF file."""
     data = get_report_data()
-   
+
     template = Template(TEMPLATE_HTML)
     html = template.render(**data)
 
