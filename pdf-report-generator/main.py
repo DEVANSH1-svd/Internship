@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 from datetime import datetime, date
 from pathlib import Path
 
@@ -47,8 +47,19 @@ def health_check():
 def create_report():
     conn = get_db()
 
-    now = datetime.now().isoformat()
     today = date.today().isoformat()
+
+    # Idempotency check: if today's report already exists, return it as-is.
+    existing = conn.execute(
+        "SELECT * FROM reports WHERE report_date = ? AND status = 'complete'",
+        (today,),
+    ).fetchone()
+
+    if existing is not None:
+        conn.close()
+        return dict(existing)
+
+    now = datetime.now().isoformat()
 
     # Insert a placeholder row first, so we get an id to name the file after.
     cur = conn.execute(
