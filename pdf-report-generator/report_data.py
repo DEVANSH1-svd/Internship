@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "report.db"
@@ -27,6 +27,13 @@ def get_report_data() -> dict:
         ORDER BY rating
     """).fetchall()
 
+    # Every book, for the long table at the end of the report
+    all_books = cur.execute("""
+        SELECT id, title, price, rating
+        FROM books
+        ORDER BY id
+    """).fetchall()
+
     conn.close()
 
     return {
@@ -34,6 +41,7 @@ def get_report_data() -> dict:
         "average_price": round(average_price, 2),
         "top_5_expensive": [dict(row) for row in top_5_expensive],
         "books_per_rating": [dict(row) for row in books_per_rating],
+        "all_books": [dict(row) for row in all_books],
     }
 
 
