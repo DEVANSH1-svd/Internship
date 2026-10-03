@@ -69,7 +69,7 @@ Download it:
 curl.exe -o my-report.pdf http://localhost:8000/reports/2/file
 ```
 
-The result is a real PDF (53,174 bytes, starts with `%PDF-1.4`).
+The result is a real PDF (66,657 bytes in a fresh-clone run, starts with `%PDF-1.4`).
 
 Unknown id:
 
