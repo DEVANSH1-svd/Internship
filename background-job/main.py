@@ -89,4 +89,21 @@ async def make_report(ctx: inngest.Context) -> dict:
     return await ctx.step.run("build-report", build_report)
 
 
-inngest.fast_api.serve(app, inngest_client, [say_hello, make_report])
+# Cron job: started by the clock, not by a request or an event.
+# "* * * * *" = every minute (testing only; a real one would run daily).
+@inngest_client.create_function(
+    fn_id="heartbeat",
+    trigger=inngest.TriggerCron(cron="* * * * *"),
+)
+async def heartbeat(ctx: inngest.Context) -> dict:
+    counts = {"pending": 0, "done": 0, "failed": 0}
+    for report in reports.values():
+        status = report["status"]
+        counts[status] = counts.get(status, 0) + 1
+    ctx.logger.info(
+        f"heartbeat: pending={counts['pending']} done={counts['done']} failed={counts['failed']}"
+    )
+    return counts
+
+
+inngest.fast_api.serve(app, inngest_client, [say_hello, make_report, heartbeat])
