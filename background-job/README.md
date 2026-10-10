@@ -62,9 +62,8 @@ A missing topic is bad input that fails every time, however often it is retried,
 
 ## Dashboard screenshots
 
-Retries: topic `fail` runs 3 attempts and ends Failed.
+Retries: topic `fail` is sent to a function configured with `retries=2` (3 attempts in total). The run history is visible in the dashboard at http://localhost:8288.
 
-![Failed run with retries](screenshots/retries.png)
 
 Heartbeat: two runs one minute apart.
 
